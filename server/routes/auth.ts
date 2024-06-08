@@ -271,7 +271,13 @@ authRoutes.post('/jellyfin', async (req, res, next) => {
       ? jellyfinHost.slice(0, -1)
       : jellyfinHost;
 
-    const account = await jellyfinserver.login(body.username, body.password);
+    const ip = req.ip ? req.ip.split(':').reverse()[0] : undefined;
+    const account = await jellyfinserver.login(
+      body.username,
+      body.password,
+      ip
+    );
+
     // Next let's see if the user already exists
     user = await userRepository.findOne({
       where: { jellyfinUserId: account.User.Id },
@@ -308,6 +314,9 @@ authRoutes.post('/jellyfin', async (req, res, next) => {
         userType: UserType.JELLYFIN,
       });
 
+      const serverName = await jellyfinserver.getServerName();
+
+      settings.jellyfin.name = serverName;
       settings.jellyfin.hostname = body.hostname ?? '';
       settings.jellyfin.serverId = account.User.ServerId;
       settings.save();
@@ -316,7 +325,7 @@ authRoutes.post('/jellyfin', async (req, res, next) => {
       await userRepository.save(user);
     }
     // User already exists, let's update their information
-    else if (body.username === user?.jellyfinUsername) {
+    else if (account.User.Id === user?.jellyfinUserId) {
       logger.info(
         `Found matching ${
           settings.main.mediaServerType === MediaServerType.JELLYFIN
